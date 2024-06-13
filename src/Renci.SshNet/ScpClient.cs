@@ -337,7 +337,7 @@ namespace Renci.SshNet
         /// <exception cref="ArgumentNullException"><paramref name="directoryInfo"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="path"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentException"><paramref name="path"/> is a zero-length string.</exception>
-        /// <exception cref="ScpException"><paramref name="path"/> does not exist on the remote host, is not a directory or the user does not have the required permission.</exception>
+        /// <exception cref="ScpException"><paramref name="path"/> is not a directory or the user does not have the required permission.</exception>
         /// <exception cref="SshException">The secure copy execution request was rejected by the server.</exception>
         /// <exception cref="SshConnectionException">Client is not connected.</exception>
         public void Upload(DirectoryInfo directoryInfo, string path)
@@ -362,6 +362,8 @@ namespace Renci.SshNet
                 throw new SshConnectionException("Client not connected.");
             }
 
+            var posixPath = PosixPath.CreateAbsoluteOrRelativeFilePath(path);
+
             using (var input = ServiceFactory.CreatePipeStream())
             using (var channel = Session.CreateChannelSession())
             {
@@ -372,16 +374,15 @@ namespace Renci.SshNet
                 // start copy with the following options:
                 // -p preserve modification and access times
                 // -r copy directories recursively
-                // -d expect path to be a directory
                 // -t copy to remote
-                if (!channel.SendExecRequest($"scp -r -p -d -t {_remotePathTransformation.Transform(path)}"))
+                if (!channel.SendExecRequest($"scp -r -p -t {_remotePathTransformation.Transform(posixPath.Directory)}"))
                 {
                     throw SecureExecutionRequestRejectedException();
                 }
 
                 CheckReturnCode(input);
 
-                UploadDirectoryContent(channel, input, directoryInfo);
+                UploadDirectory(channel, input, directoryInfo, posixPath.File);
             }
         }
 
@@ -662,6 +663,7 @@ namespace Renci.SshNet
 
         private void SendData(IChannel channel, string command)
         {
+            Console.WriteLine(command);
             channel.SendData(ConnectionInfo.Encoding.GetBytes(command));
         }
 
@@ -727,8 +729,14 @@ namespace Renci.SshNet
         /// <param name="channel">The channel to perform the upload in.</param>
         /// <param name="input">A <see cref="Stream"/> from which any feedback from the server can be read.</param>
         /// <param name="directoryInfo">The directory to upload.</param>
-        private void UploadDirectoryContent(IChannelSession channel, Stream input, DirectoryInfo directoryInfo)
+        /// <param name="directoryName">The name of the remote directory.</param>
+        private void UploadDirectory(IChannelSession channel, Stream input, DirectoryInfo directoryInfo, string directoryName)
         {
+            if (directoryName != ".")
+            {
+                UploadDirectoryModeAndName(channel, input, directoryName);
+            }
+
             // Upload files
             var files = directoryInfo.GetFiles();
             foreach (var file in files)
@@ -746,8 +754,7 @@ namespace Renci.SshNet
             foreach (var directory in directories)
             {
                 UploadTimes(channel, input, directory);
-                UploadDirectoryModeAndName(channel, input, directory.Name);
-                UploadDirectoryContent(channel, input, directory);
+                UploadDirectory(channel, input, directory, directory.Name);
             }
 
             // Mark upload of current directory complete

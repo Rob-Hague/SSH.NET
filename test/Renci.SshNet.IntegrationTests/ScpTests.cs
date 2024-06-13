@@ -1588,8 +1588,10 @@ namespace Renci.SshNet.IntegrationTests
 
         [DataTestMethod]
         [DynamicData(nameof(GetScpUploadDirectoryInfoExistingDirectoryData), DynamicDataSourceType.Method)]
-        public void Scp_Upload_DirectoryInfo_ExistingDirectory(IRemotePathTransformation remotePathTransformation,
-                                                               string remoteDirectory)
+        public void Scp_Upload_DirectoryInfo(
+            IRemotePathTransformation remotePathTransformation,
+            string remoteDirectory,
+            bool existingDirectory)
         {
             string absoluteRemoteDirectory = GetAbsoluteRemotePath(_connectionInfoFactory, remoteDirectory);
 
@@ -1639,7 +1641,10 @@ namespace Renci.SshNet.IntegrationTests
                         client.DeleteDirectory(remoteDirectory);
                     }
 
-                    client.CreateDirectory(remoteDirectory);
+                    if (existingDirectory)
+                    {
+                        client.CreateDirectory(remoteDirectory);
+                    }
                 }
             }
 
@@ -1896,9 +1901,10 @@ namespace Renci.SshNet.IntegrationTests
 
         private static IEnumerable<object[]> GetScpUploadDirectoryInfoExistingDirectoryData()
         {
-            yield return new object[] { RemotePathTransformation.None, "scp-directorydoesnotexist" };
-            yield return new object[] { RemotePathTransformation.None, "." };
-            yield return new object[] { RemotePathTransformation.ShellQuote, "/home/sshnet/dir|&;<>()$`\"'sp\u0100ce \\tab\tlf*?[#~=%" };
+            yield return new object[] { RemotePathTransformation.None, "scp-directorydoesnotexist", true };
+            yield return new object[] { RemotePathTransformation.None, ".", true };
+            yield return new object[] { RemotePathTransformation.ShellQuote, "/home/sshnet/dir|&;<>()$`\"'sp\u0100ce \\tab\tlf*?[#~=%", true };
+            yield return new object[] { RemotePathTransformation.None, "scp-directorydoesnotexist", false };
         }
 
         private static IEnumerable<object[]> GetScpUploadDirectoryInfoExistingFileData()
