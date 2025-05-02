@@ -191,3 +191,6 @@ dotnet_diagnostic.MA0042.severity = none
 
 # S3236: Caller information arguments should not be provided explicitly
 dotnet_diagnostic.S3236.severity = none
+
+# SA1131: Use readable conditions
+dotnet_diagnostic.SA1131.severity = silent

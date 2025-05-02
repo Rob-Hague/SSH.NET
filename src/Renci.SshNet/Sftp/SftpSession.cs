@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,9 +25,9 @@ namespace Renci.SshNet.Sftp
 
         private readonly Dictionary<uint, SftpRequest> _requests = new Dictionary<uint, SftpRequest>();
         private readonly ISftpResponseFactory _sftpResponseFactory;
-        private readonly List<byte> _data = new List<byte>(32 * 1024);
+        private readonly Sequence<byte> _sequence = new();
         private readonly Encoding _encoding;
-        private EventWaitHandle _sftpVersionConfirmed = new AutoResetEvent(initialState: false);
+        private AutoResetEvent _sftpVersionConfirmed = new AutoResetEvent(initialState: false);
         private IDictionary<string, string> _supportedExtensions;
 
         /// <summary>
@@ -303,125 +306,89 @@ namespace Renci.SshNet.Sftp
 
         protected override void OnDataReceived(byte[] data)
         {
-            const int packetLengthByteCount = 4;
-            const int sftpMessageTypeByteCount = 1;
-            const int minimumChannelDataLength = packetLengthByteCount + sftpMessageTypeByteCount;
+            _sequence.Add(data);
 
-            var offset = 0;
-            var count = data.Length;
-
-            // improve performance and reduce GC pressure by not buffering channel data if the received
-            // chunk contains the complete packet data.
-            //
-            // for this, the buffer should be empty and the chunk should contain at least the packet length
-            // and the type of the SFTP message
-            if (_data.Count == 0)
+            while (true)
             {
-                while (count >= minimumChannelDataLength)
-                {
-                    // extract packet length
-                    var packetDataLength = data[offset] << 24 | data[offset + 1] << 16 | data[offset + 2] << 8 |
-                                           data[offset + 3];
+                var sequence = _sequence.AsReadOnlySequence();
 
-                    var packetTotalLength = packetDataLength + packetLengthByteCount;
+                var sequenceReader = new SequenceReader<byte>(sequence);
 
-                    // check if complete packet data (or more) is available
-                    if (count >= packetTotalLength)
-                    {
-                        // load and process SFTP message
-                        if (!TryLoadSftpMessage(data, offset + packetLengthByteCount, packetDataLength))
-                        {
-                            return;
-                        }
-
-                        // remove processed bytes from the number of bytes to process as the channel
-                        // data we received may contain (part of) another message
-                        count -= packetTotalLength;
-
-                        // move offset beyond bytes we just processed
-                        offset += packetTotalLength;
-                    }
-                    else
-                    {
-                        // we don't have a complete message
-                        break;
-                    }
-                }
-
-                // check if there is channel data left to process or buffer
-                if (count == 0)
+                if (!sequenceReader.TryReadBigEndian(out int packetLength) ||
+                    !sequenceReader.TryRead(out var messageType) ||
+                    !sequenceReader.TryReadExact(packetLength - 1, out var payloadSequence))
                 {
                     return;
                 }
 
-                // check if we processed part of the channel data we received
-                if (offset > 0)
-                {
-                    // add (remaining) channel data to internal data holder
-                    var remainingChannelData = new byte[count];
-                    Buffer.BlockCopy(data, offset, remainingChannelData, 0, count);
-                    _data.AddRange(remainingChannelData);
-                }
-                else
-                {
-                    // add (remaining) channel data to internal data holder
-                    _data.AddRange(data);
-                }
+                // return val necessary?
+                _ = TryLoadSftpMessage(messageType, payloadSequence);
 
-                // skip further processing as we'll need a new chunk to complete the message
-                return;
-            }
-
-            // add (remaining) channel data to internal data holder
-            _data.AddRange(data);
-
-            while (_data.Count >= minimumChannelDataLength)
-            {
-                // extract packet length
-                var packetDataLength = _data[0] << 24 | _data[1] << 16 | _data[2] << 8 | _data[3];
-
-                var packetTotalLength = packetDataLength + packetLengthByteCount;
-
-                // check if complete packet data is available
-                if (_data.Count < packetTotalLength)
-                {
-                    // wait for complete message to arrive first
-                    break;
-                }
-
-                // create buffer to hold packet data
-                var packetData = new byte[packetDataLength];
-
-                // copy packet data and bytes for length to array
-                _data.CopyTo(packetLengthByteCount, packetData, 0, packetDataLength);
-
-                // remove loaded data and bytes for length from _data holder
-                if (_data.Count == packetTotalLength)
-                {
-                    // the only buffered data is the data we're processing
-                    _data.Clear();
-                }
-                else
-                {
-                    // remove only the data we're processing
-                    _data.RemoveRange(0, packetTotalLength);
-                }
-
-                // load and process SFTP message
-                if (!TryLoadSftpMessage(packetData, 0, packetDataLength))
-                {
-                    break;
-                }
+                _sequence.Discard(4 + packetLength);
             }
         }
 
-        private bool TryLoadSftpMessage(byte[] packetData, int offset, int count)
+#if !NET
+        private sealed class SequenceReader<T>
+            where T : unmanaged
+        {
+            private ReadOnlySequence<T> _sequence;
+
+            public SequenceReader(ReadOnlySequence<T> sequence)
+            {
+                _sequence = sequence;
+            }
+
+            public bool TryReadBigEndian(out int value)
+            {
+                var sequence = _sequence;
+
+                if (sequence.Length < 4)
+                {
+                    value = default;
+                    return false;
+                }
+
+                sequence = sequence.Slice(0, 4);
+
+                if (sequence.IsSingleSegment)
+                {
+                    value = BinaryPrimitives.ReadInt32BigEndian(sequence.First.Span);
+                }
+                else
+                {
+                    var buffer = new byte[4];
+                    sequence.CopyTo(buffer);
+                    value = BinaryPrimitives.ReadInt32BigEndian(buffer);
+                }
+
+                _sequence = _sequence.Slice(4);
+
+                return true;
+            }
+        }
+
+#endif
+
+        private bool TryLoadSftpMessage(byte messageType, ReadOnlySequence<byte> payloadSequence)
         {
             // Create SFTP message
-            var response = _sftpResponseFactory.Create(ProtocolVersion, packetData[offset], _encoding);
+            var response = _sftpResponseFactory.Create(ProtocolVersion, messageType, _encoding);
 
-            // Load message data into it
-            response.Load(packetData, offset + 1, count - 1);
+            if (messageType == (byte)SftpMessageTypes.Data)
+            {
+                // set payload directly onto SftpDataResponse
+            }
+            else if (payloadSequence.IsSingleSegment &&
+                MemoryMarshal.TryGetArray(payloadSequence.First, out var payloadSegment))
+            {
+                response.Load(payloadSegment.Array, payloadSegment.Offset, payloadSegment.Count);
+            }
+            else
+            {
+                var payloadArray = payloadSequence.ToArray();
+                response.Load(payloadArray, 0, payloadArray.Length);
+            }
 
             try
             {
