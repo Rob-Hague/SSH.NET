@@ -329,13 +329,15 @@ namespace Renci.SshNet.Sftp
         }
 
 #if !NET
+#pragma warning disable S2326 // 'T' is not used; Just to make it look like the real SequenceReader
         private sealed class SequenceReader<T>
-            where T : unmanaged
+#pragma warning restore S2326 // 'T' is not used
         {
-            private ReadOnlySequence<T> _sequence;
+            private ReadOnlySequence<byte> _sequence;
 
-            public SequenceReader(ReadOnlySequence<T> sequence)
+            public SequenceReader(ReadOnlySequence<byte> sequence)
             {
+                Debug.Assert(typeof(T) == typeof(byte));
                 _sequence = sequence;
             }
 
@@ -375,9 +377,9 @@ namespace Renci.SshNet.Sftp
             // Create SFTP message
             var response = _sftpResponseFactory.Create(ProtocolVersion, messageType, _encoding);
 
-            if (messageType == (byte)SftpMessageTypes.Data)
+            if (response is SftpDataResponse dataResponse)
             {
-                // set payload directly onto SftpDataResponse
+                dataResponse.Data = payloadSequence;
             }
             else if (payloadSequence.IsSingleSegment &&
                 MemoryMarshal.TryGetArray(payloadSequence.First, out var payloadSegment))
