@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Buffers;
+#if !NET
 using System.Buffers.Binary;
+#endif
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -359,7 +361,7 @@ namespace Renci.SshNet.Sftp
                 }
                 else
                 {
-                    var buffer = new byte[4];
+                    Span<byte> buffer = stackalloc byte[4];
                     sequence.CopyTo(buffer);
                     value = BinaryPrimitives.ReadInt32BigEndian(buffer);
                 }
@@ -368,8 +370,37 @@ namespace Renci.SshNet.Sftp
 
                 return true;
             }
-        }
 
+            public bool TryRead(out byte value)
+            {
+                if (_sequence.IsEmpty)
+                {
+                    value = default;
+                    return false;
+                }
+
+                value = _sequence.First.Span[0];
+
+                _sequence = _sequence.Slice(1);
+
+                return true;
+            }
+
+            public bool TryReadExact(int count, out ReadOnlySequence<byte> sequence)
+            {
+                if (_sequence.Length < count)
+                {
+                    sequence = default;
+                    return false;
+                }
+
+                sequence = _sequence.Slice(0, count);
+
+                _sequence = _sequence.Slice(count);
+
+                return true;
+            }
+        }
 #endif
 
         private bool TryLoadSftpMessage(byte messageType, ReadOnlySequence<byte> payloadSequence)
@@ -377,11 +408,10 @@ namespace Renci.SshNet.Sftp
             // Create SFTP message
             var response = _sftpResponseFactory.Create(ProtocolVersion, messageType, _encoding);
 
-            if (response is SftpDataResponse dataResponse)
-            {
-                dataResponse.Data = payloadSequence;
-            }
-            else if (payloadSequence.IsSingleSegment &&
+            // TODO special case SftpDataResponse and pass the sequence through the layers.
+            // or just use an array buffer and keep it simple, stupid?
+            // it still needs to parse out response_id, read length-prefixed string...
+            if (payloadSequence.IsSingleSegment &&
                 MemoryMarshal.TryGetArray(payloadSequence.First, out var payloadSegment))
             {
                 response.Load(payloadSegment.Array, payloadSegment.Offset, payloadSegment.Count);

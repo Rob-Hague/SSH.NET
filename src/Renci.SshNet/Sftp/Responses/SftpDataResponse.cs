@@ -1,7 +1,4 @@
-﻿using System;
-using System.Buffers;
-
-namespace Renci.SshNet.Sftp.Responses
+﻿namespace Renci.SshNet.Sftp.Responses
 {
     internal sealed class SftpDataResponse : SftpResponse
     {
@@ -10,7 +7,7 @@ namespace Renci.SshNet.Sftp.Responses
             get { return SftpMessageTypes.Data; }
         }
 
-        public ReadOnlySequence<byte> Data { get; set; }
+        public byte[] Data { get; set; }
 
         public SftpDataResponse(uint protocolVersion)
             : base(protocolVersion)
@@ -19,12 +16,16 @@ namespace Renci.SshNet.Sftp.Responses
 
         protected override void LoadData()
         {
-            throw new NotImplementedException();
+            base.LoadData();
+
+            Data = ReadBinary();
         }
 
         protected override void SaveData()
         {
-            throw new NotImplementedException();
+            base.SaveData();
+
+            WriteBinary(Data, 0, Data.Length);
         }
     }
 }
