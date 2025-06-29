@@ -93,6 +93,7 @@ namespace Renci.SshNet.Tests.Classes.Sftp
         {
             var sessionMock = new Mock<ISftpSession>();
 
+            sessionMock.Setup(s => s.CalculateOptimalWriteLength(It.IsAny<uint>(), It.IsAny<byte[]>())).Returns<uint, byte[]>((x, _) => x);
             sessionMock.Setup(s => s.IsOpen).Returns(true);
 
             SetupRemoteSize(sessionMock, 128);
@@ -118,6 +119,7 @@ namespace Renci.SshNet.Tests.Classes.Sftp
         {
             var sessionMock = new Mock<ISftpSession>();
 
+            sessionMock.Setup(s => s.CalculateOptimalWriteLength(It.IsAny<uint>(), It.IsAny<byte[]>())).Returns<uint, byte[]>((x, _) => x);
             sessionMock.Setup(s => s.IsOpen).Returns(true);
 
             var s = SftpFileStream.Open(sessionMock.Object, "file.txt", FileMode.Open, FileAccess.Read, bufferSize: 1024);
@@ -135,7 +137,6 @@ namespace Renci.SshNet.Tests.Classes.Sftp
             Assert.Throws<NotSupportedException>(() => s.SetLength(1024));
         }
 
-        [Ignore("TODO Currently throws EndOfStreamException in all cases.")]
         [TestMethod]
         [DataRow(-1, SeekOrigin.Begin)]
         [DataRow(-1, SeekOrigin.Current)]
@@ -144,6 +145,7 @@ namespace Renci.SshNet.Tests.Classes.Sftp
         {
             var sessionMock = new Mock<ISftpSession>();
 
+            sessionMock.Setup(s => s.CalculateOptimalWriteLength(It.IsAny<uint>(), It.IsAny<byte[]>())).Returns<uint, byte[]>((x, _) => x);
             sessionMock.Setup(s => s.IsOpen).Returns(true);
 
             SetupRemoteSize(sessionMock, 128);
@@ -210,6 +212,7 @@ namespace Renci.SshNet.Tests.Classes.Sftp
         {
             var sessionMock = new Mock<ISftpSession>();
 
+            sessionMock.Setup(s => s.CalculateOptimalReadLength(It.IsAny<uint>())).Returns<uint>(x => x);
             sessionMock.Setup(s => s.CalculateOptimalWriteLength(It.IsAny<uint>(), It.IsAny<byte[]>())).Returns<uint, byte[]>((x, _) => x);
             sessionMock.Setup(s => s.IsOpen).Returns(true);
             SetupRemoteSize(sessionMock, 0);
@@ -246,6 +249,7 @@ namespace Renci.SshNet.Tests.Classes.Sftp
         {
             var sessionMock = new Mock<ISftpSession>();
 
+            sessionMock.Setup(s => s.CalculateOptimalWriteLength(It.IsAny<uint>(), It.IsAny<byte[]>())).Returns<uint, byte[]>((x, _) => x);
             sessionMock.Setup(s => s.IsOpen).Returns(true);
 
             var s = SftpFileStream.Open(sessionMock.Object, "file.txt", FileMode.Create, FileAccess.ReadWrite, bufferSize: 1024);
