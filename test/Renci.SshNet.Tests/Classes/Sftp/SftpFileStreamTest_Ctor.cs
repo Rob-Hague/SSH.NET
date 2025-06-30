@@ -2,12 +2,12 @@
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Moq;
 
-using Renci.SshNet.Abstractions;
 using Renci.SshNet.Common;
 using Renci.SshNet.Sftp;
 using Renci.SshNet.Sftp.Responses;
@@ -102,8 +102,8 @@ namespace Renci.SshNet.Tests.Classes.Sftp
         [DataRow(FileMode.Create, (int)(Flags.Write /* TODO | Flags.CreateNewOrOpen */ | Flags.Truncate))]
         [DataRow(FileMode.Open, (int)(Flags.Write))]
         [DataRow(FileMode.OpenOrCreate, (int)(Flags.Write | Flags.CreateNewOrOpen))]
-        //[DataRow(FileMode.Truncate, (int)(Flags.Write))] // TODO needs to set size in attrs?
-        [DataRow(FileMode.Append, (int)(Flags.Write | Flags.Append | Flags.CreateNewOrOpen))]
+        [DataRow(FileMode.Truncate, (int)(Flags.Write /* TODO | Flags.CreateNewOrOpen */ | Flags.Truncate))] // TODO Truncate should throw if not exists
+        [DataRow(FileMode.Append, (int)(Flags.Write | Flags.Append | Flags.CreateNewOrOpen))] // TODO Append should not allow seeking before initial pos
         public void RequestOpen_CorrectFlags(FileMode mode, int expectedFlags)
         {
             var sessionMock = new Mock<ISftpSession>();
@@ -147,7 +147,7 @@ namespace Renci.SshNet.Tests.Classes.Sftp
             const int InitialSize = 128;
             SetupRemoteSize(sessionMock, InitialSize);
 
-            var s = new SftpFileStream(sessionMock.Object, "file.txt", FileMode.OpenOrCreate, FileAccess.ReadWrite, bufferSize: 3);
+            var s = new SftpFileStream(sessionMock.Object, "file.txt", FileMode.OpenOrCreate, FileAccess.ReadWrite, bufferSize: 1024);
 
             Assert.IsTrue(s.CanRead);
             Assert.IsTrue(s.CanSeek);
@@ -156,12 +156,13 @@ namespace Renci.SshNet.Tests.Classes.Sftp
             Assert.AreEqual(InitialSize, s.Length);
             Assert.AreEqual(0, s.Position);
 
-            // Seek past the end of the file
+            // Seeking and writing past the end of the file should work
             Assert.AreEqual(InitialSize + 20, s.Seek(20, SeekOrigin.End));
             Assert.AreEqual(InitialSize + 20, s.Position);
 
             byte[] newData = "Some new bytes"u8.ToArray();
             s.Write(newData, 0, newData.Length);
+            s.Flush();
 
             VerifyRequestWrite(sessionMock, newData, serverOffset: InitialSize + 20);
 
@@ -177,13 +178,57 @@ namespace Renci.SshNet.Tests.Classes.Sftp
             Assert.AreEqual(newSize - 60, s.Position);
 
             newData = "Some more new bytes"u8.ToArray();
-            s.Write(newData, 0, newData.Length);
+            s.Write(newData, 5, newData.Length - 5);
+            s.Flush();
 
-            VerifyRequestWrite(sessionMock, newData, serverOffset: newSize - 60);
+            VerifyRequestWrite(sessionMock, newData.Take(5, newData.Length - 5), serverOffset: newSize - 60);
         }
 
         [TestMethod]
         public void SeekAndRead()
+        {
+            TestSeekAndRead((s, buffer, offset, count) => s.Read(buffer, offset, count));
+        }
+
+        [TestMethod]
+        public void SeekAndReadByte()
+        {
+            TestSeekAndRead((s, buffer, offset, count) =>
+            {
+                int bytesRead = 0;
+                int b;
+
+                while (bytesRead < count && (b = s.ReadByte()) != -1)
+                {
+                    buffer[offset + bytesRead] = (byte)b;
+                    bytesRead++;
+                }
+
+                return bytesRead;
+            });
+        }
+
+        [TestMethod]
+        public void SeekAndReadAsync()
+        {
+            TestSeekAndRead((s, buffer, offset, count) => s.ReadAsync(buffer, offset, count).GetAwaiter().GetResult());
+        }
+
+#if NET
+        [TestMethod]
+        public void SeekAndReadSpan()
+        {
+            TestSeekAndRead((s, buffer, offset, count) => s.Read(buffer.AsSpan(offset, count)));
+        }
+
+        [TestMethod]
+        public void SeekAndReadAsyncMemory()
+        {
+            TestSeekAndRead((s, buffer, offset, count) => s.ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult());
+        }
+#endif
+
+        public void TestSeekAndRead(Func<SftpFileStream, byte[], int, int, int> readAction)
         {
             var sessionMock = new Mock<ISftpSession>();
 
@@ -201,6 +246,12 @@ namespace Renci.SshNet.Tests.Classes.Sftp
                 .Returns<byte[], ulong, uint>((_, offset, length)
                     => remoteData.Take((int)offset, (int)Math.Min((ulong)remoteData.Length - offset, length)));
 
+            // And RequestReadAsync
+            sessionMock
+                .Setup(s => s.RequestReadAsync(It.IsAny<byte[]>(), It.IsAny<ulong>(), It.IsAny<uint>(), It.Is<CancellationToken>(c => !c.IsCancellationRequested)))
+                .Returns<byte[], ulong, uint, CancellationToken>((_, offset, length, _)
+                    => Task.FromResult(remoteData.Take((int)offset, (int)Math.Min((ulong)remoteData.Length - offset, length))));
+
             var s = new SftpFileStream(sessionMock.Object, "file.txt", FileMode.Open, FileAccess.Read, bufferSize: 3);
 
             Assert.IsTrue(s.CanRead);
@@ -215,7 +266,7 @@ namespace Renci.SshNet.Tests.Classes.Sftp
             Assert.AreEqual(32, s.Position);
 
             var buffer = new byte[16];
-            Assert.AreEqual(16, s.Read(buffer, 0, buffer.Length));
+            Assert.AreEqual(16, readAction(s, buffer, 0, buffer.Length));
 
             CollectionAssert.AreEqual(remoteData.Take(32, 16), buffer);
 
@@ -274,6 +325,7 @@ namespace Renci.SshNet.Tests.Classes.Sftp
 
             var s = new SftpFileStream(sessionMock.Object, "file.txt", FileMode.OpenOrCreate, FileAccess.ReadWrite, bufferSize: 1024);
 
+            // Buffer some data
             byte[] newData = "Some new bytes"u8.ToArray();
             s.Write(newData, 0, newData.Length);
 
@@ -321,6 +373,12 @@ namespace Renci.SshNet.Tests.Classes.Sftp
             // Test no-op second dispose
             s.Dispose();
             sessionMock.Verify(p => p.RequestClose(It.IsAny<byte[]>()), Times.Once);
+
+            Assert.Throws<ObjectDisposedException>(() => s.Read(new byte[16], 0, 16));
+            Assert.Throws<ObjectDisposedException>(() => s.Write(new byte[16], 0, 16));
+            Assert.Throws<ObjectDisposedException>(s.Flush);
+            Assert.Throws<ObjectDisposedException>(() => s.Seek(0, SeekOrigin.Begin));
+            Assert.Throws<ObjectDisposedException>(() => s.SetLength(128));
         }
 
         private static void VerifyRequestWrite(Mock<ISftpSession> sessionMock, ReadOnlyMemory<byte> newData, int serverOffset)
@@ -341,6 +399,5 @@ namespace Renci.SshNet.Tests.Classes.Sftp
             // Needed in a (non-local) function because expression lambdas can't contain spans
             return searchSpace.AsSpan().IndexOf(searchValue.Span);
         }
-
     }
 }
