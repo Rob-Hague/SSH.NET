@@ -77,6 +77,7 @@ namespace Renci.SshNet.Tests.Classes.Sftp
 
             Assert.Throws<NotSupportedException>(() => s.Write(new byte[4], 0, 4));
             Assert.Throws<NotSupportedException>(() => s.WriteByte(0xf));
+            Assert.Throws<NotSupportedException>(() => s.SetLength(1024));
         }
 
         [Ignore("TODO Currently throws EndOfStreamException in all cases.")]
@@ -379,6 +380,36 @@ namespace Renci.SshNet.Tests.Classes.Sftp
             Assert.Throws<ObjectDisposedException>(s.Flush);
             Assert.Throws<ObjectDisposedException>(() => s.Seek(0, SeekOrigin.Begin));
             Assert.Throws<ObjectDisposedException>(() => s.SetLength(128));
+        }
+
+        [TestMethod]
+        [DataRow(256)] // Longer
+        [DataRow(64)] // Shorter
+        [DataRow(128)] // Existing
+        public void SetLength(int newLength)
+        {
+            const int ExistingLength = 128;
+
+            var sessionMock = new Mock<ISftpSession>();
+
+            sessionMock.Setup(s => s.IsOpen).Returns(true);
+
+            SetupRemoteSize(sessionMock, ExistingLength);
+
+            var s = new SftpFileStream(sessionMock.Object, "file.txt", FileMode.Create, FileAccess.ReadWrite, bufferSize: 1024);
+
+            // Seek to the end - we will test that Position is reduced when truncating, and otherwise unchanged.
+            Assert.AreEqual(ExistingLength, s.Seek(0, SeekOrigin.End));
+            Assert.AreEqual(ExistingLength, s.Length);
+
+            s.SetLength(newLength);
+
+            sessionMock.Verify(p => p.RequestFSetStat(It.IsAny<byte[]>(), It.Is<SftpFileAttributes>(f => f.Size == newLength)), Times.Once);
+
+            SetupRemoteSize(sessionMock, newLength);
+
+            Assert.AreEqual(newLength, s.Length);
+            Assert.AreEqual(Math.Min(ExistingLength, newLength), s.Position);
         }
 
         private static void VerifyRequestWrite(Mock<ISftpSession> sessionMock, ReadOnlyMemory<byte> newData, int serverOffset)
