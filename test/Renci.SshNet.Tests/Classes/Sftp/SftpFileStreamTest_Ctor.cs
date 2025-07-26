@@ -312,6 +312,12 @@ namespace Renci.SshNet.Tests.Classes.Sftp
         }
 
         [TestMethod]
+        public void SetLength_SendsBufferedWrites()
+        {
+            TestSendsBufferedWrites(s => s.SetLength(256));
+        }
+
+        [TestMethod]
         public void Dispose_SendsBufferedWrites()
         {
             TestSendsBufferedWrites(s => s.Dispose());
