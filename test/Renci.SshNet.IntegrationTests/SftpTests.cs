@@ -4245,12 +4245,18 @@ namespace Renci.SshNet.IntegrationTests
                 {
                     using (var s = client.Open(remoteFile, FileMode.CreateNew, FileAccess.Write))
                     {
+                        Assert.IsFalse(s.CanRead);
+                        Assert.IsTrue(s.CanWrite);
+
                         s.Write(new byte[] { 5, 4, 3, 2, 1 }, 1, 3);
                     }
 
                     // switch from read to write mode
                     using (var s = client.Open(remoteFile, FileMode.Open, FileAccess.ReadWrite))
                     {
+                        Assert.IsTrue(s.CanRead);
+                        Assert.IsTrue(s.CanWrite);
+
                         Assert.AreEqual(4, s.ReadByte());
                         Assert.AreEqual(3, s.ReadByte());
 
@@ -4264,6 +4270,9 @@ namespace Renci.SshNet.IntegrationTests
 
                     using (var s = client.Open(remoteFile, FileMode.Open, FileAccess.Read))
                     {
+                        Assert.IsTrue(s.CanRead);
+                        Assert.IsFalse(s.CanWrite);
+
                         Assert.AreEqual(6, s.Length);
 
                         var buffer = new byte[s.Length];
@@ -5455,6 +5464,7 @@ namespace Renci.SshNet.IntegrationTests
 
                     using (var downloaded = new MemoryStream())
                     {
+                        // copyto?
                         client.DownloadFile(remoteFile, downloaded);
                         downloaded.Position = 0;
                         Assert.AreEqual(CreateHash(new byte[size]), CreateHash(downloaded));
