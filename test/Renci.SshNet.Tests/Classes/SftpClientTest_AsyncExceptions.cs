@@ -128,13 +128,11 @@ namespace Renci.SshNet.Tests.Classes
             Assert.AreEqual(ex.Message, ex2.Message);
         }
 
-#pragma warning disable IDE0022 // Use block body for method
-#pragma warning disable IDE0025 // Use block body for property
-#pragma warning disable CS0067 // event is unused
         private class MySession(ConnectionInfo connectionInfo) : ISession
         {
             public IConnectionInfo ConnectionInfo => connectionInfo;
 
+#pragma warning disable CS0067 // event is unused
             public event EventHandler<MessageEventArgs<ChannelCloseMessage>> ChannelCloseReceived;
             public event EventHandler<MessageEventArgs<ChannelDataMessage>> ChannelDataReceived;
             public event EventHandler<MessageEventArgs<ChannelEofMessage>> ChannelEofReceived;
@@ -153,6 +151,7 @@ namespace Renci.SshNet.Tests.Classes
             public event EventHandler<MessageEventArgs<RequestSuccessMessage>> RequestSuccessReceived;
             public event EventHandler<MessageEventArgs<RequestFailureMessage>> RequestFailureReceived;
             public event EventHandler<MessageEventArgs<BannerMessage>> UserAuthenticationBannerReceived;
+#pragma warning restore CS0067
 
             public void InvokeDisconnected()
             {

@@ -415,8 +415,6 @@ namespace Renci.SshNet.Tests.Classes
             public event EventHandler<ChannelRequestEventArgs> RequestReceived;
 #pragma warning restore 0067
 
-#pragma warning disable IDE0025 // Use block body for property
-#pragma warning disable IDE0022 // Use block body for method
             public uint LocalChannelNumber => throw new NotImplementedException();
 
             public uint LocalPacketSize => throw new NotImplementedException();
@@ -452,8 +450,6 @@ namespace Renci.SshNet.Tests.Classes
             public void SendWindowChangeRequest(uint columns, uint rows, uint width, uint height) => throw new NotImplementedException();
 
             public bool SendX11ForwardingRequest(bool isSingleConnection, string protocol, byte[] cookie, uint screenNumber) => throw new NotImplementedException();
-#pragma warning restore IDE0022 // Use block body for method
-#pragma warning restore IDE0025 // Use block body for property
         }
     }
 }

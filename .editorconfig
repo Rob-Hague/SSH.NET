@@ -901,14 +901,14 @@ csharp_style_var_elsewhere = true
 
 # Expression-bodies members
 
-csharp_style_expression_bodied_methods = false
-csharp_style_expression_bodied_constructors = false
-csharp_style_expression_bodied_operators = false
-csharp_style_expression_bodied_properties = false
-csharp_style_expression_bodied_indexers = false
-csharp_style_expression_bodied_accessors = false
-csharp_style_expression_bodied_lambdas = false
-csharp_style_expression_bodied_local_functions = false
+csharp_style_expression_bodied_methods = true:none
+csharp_style_expression_bodied_constructors = false:none
+csharp_style_expression_bodied_operators = true:none
+csharp_style_expression_bodied_properties = true:none
+csharp_style_expression_bodied_indexers = true:none
+csharp_style_expression_bodied_accessors = true:none
+csharp_style_expression_bodied_lambdas = true:none
+csharp_style_expression_bodied_local_functions = true:none
 
 # Pattern matching preferences
 
