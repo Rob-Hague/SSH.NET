@@ -621,50 +621,50 @@ namespace Renci.SshNet
             switch (addressType)
             {
                 case 0x01: // IPv4
+                {
+                    var addressBuffer = new byte[4];
+                    if (SocketAbstraction.Read(socket, addressBuffer, 0, 4, timeout) == 0)
                     {
-                        var addressBuffer = new byte[4];
-                        if (SocketAbstraction.Read(socket, addressBuffer, 0, 4, timeout) == 0)
-                        {
-                            // SOCKS client closed connection
-                            return null;
-                        }
-
-                        var ipv4 = new IPAddress(addressBuffer);
-                        return ipv4.ToString();
+                        // SOCKS client closed connection
+                        return null;
                     }
+
+                    var ipv4 = new IPAddress(addressBuffer);
+                    return ipv4.ToString();
+                }
 
                 case 0x03: // Domain name
+                {
+                    var length = SocketAbstraction.ReadByte(socket, timeout);
+                    if (length == -1)
                     {
-                        var length = SocketAbstraction.ReadByte(socket, timeout);
-                        if (length == -1)
-                        {
-                            // SOCKS client closed connection
-                            return null;
-                        }
-
-                        var addressBuffer = new byte[length];
-                        if (SocketAbstraction.Read(socket, addressBuffer, 0, addressBuffer.Length, timeout) == 0)
-                        {
-                            // SOCKS client closed connection
-                            return null;
-                        }
-
-                        var hostName = SshData.Ascii.GetString(addressBuffer, 0, addressBuffer.Length);
-                        return hostName;
+                        // SOCKS client closed connection
+                        return null;
                     }
+
+                    var addressBuffer = new byte[length];
+                    if (SocketAbstraction.Read(socket, addressBuffer, 0, addressBuffer.Length, timeout) == 0)
+                    {
+                        // SOCKS client closed connection
+                        return null;
+                    }
+
+                    var hostName = SshData.Ascii.GetString(addressBuffer, 0, addressBuffer.Length);
+                    return hostName;
+                }
 
                 case 0x04: // IPv6
+                {
+                    var addressBuffer = new byte[16];
+                    if (SocketAbstraction.Read(socket, addressBuffer, 0, 16, timeout) == 0)
                     {
-                        var addressBuffer = new byte[16];
-                        if (SocketAbstraction.Read(socket, addressBuffer, 0, 16, timeout) == 0)
-                        {
-                            // SOCKS client closed connection
-                            return null;
-                        }
-
-                        var ipv6 = new IPAddress(addressBuffer);
-                        return ipv6.ToString();
+                        // SOCKS client closed connection
+                        return null;
                     }
+
+                    var ipv6 = new IPAddress(addressBuffer);
+                    return ipv6.ToString();
+                }
 
                 default:
                     throw new ProxyException(string.Format(CultureInfo.InvariantCulture, "SOCKS5: Address type '{0}' is not supported.", addressType));

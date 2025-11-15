@@ -6269,70 +6269,70 @@ namespace Renci.SshNet.IntegrationTests
                         switch (op)
                         {
                             case 0 when local.Length < MaxFileSize: // Write
-                                {
-                                    var buffer = new byte[random.Next(0, MaxBufferSize)];
-                                    random.NextBytes(buffer);
-                                    int offset = random.Next(0, buffer.Length + 1);
-                                    int count = random.Next(0, buffer.Length - offset + 1);
+                            {
+                                var buffer = new byte[random.Next(0, MaxBufferSize)];
+                                random.NextBytes(buffer);
+                                int offset = random.Next(0, buffer.Length + 1);
+                                int count = random.Next(0, buffer.Length - offset + 1);
 
-                                    remote.Write(buffer, offset, count);
-                                    local.Write(buffer, offset, count);
-                                    break;
-                                }
+                                remote.Write(buffer, offset, count);
+                                local.Write(buffer, offset, count);
+                                break;
+                            }
                             case 1: // Read
-                                {
-                                    var remoteBuffer = new byte[random.Next(0, MaxBufferSize)];
-                                    var localBuffer = new byte[remoteBuffer.Length];
-                                    int offset = random.Next(0, remoteBuffer.Length + 1);
-                                    int count = random.Next(0, remoteBuffer.Length - offset + 1);
+                            {
+                                var remoteBuffer = new byte[random.Next(0, MaxBufferSize)];
+                                var localBuffer = new byte[remoteBuffer.Length];
+                                int offset = random.Next(0, remoteBuffer.Length + 1);
+                                int count = random.Next(0, remoteBuffer.Length - offset + 1);
 
-                                    int remoteRead = ReadExactly(remote, remoteBuffer, offset, count);
-                                    int localRead = ReadExactly(local, localBuffer, offset, count);
+                                int remoteRead = ReadExactly(remote, remoteBuffer, offset, count);
+                                int localRead = ReadExactly(local, localBuffer, offset, count);
 
-                                    Assert.AreEqual(localRead, remoteRead);
-                                    CollectionAssert.AreEqual(localBuffer, remoteBuffer);
-                                    break;
-                                }
+                                Assert.AreEqual(localRead, remoteRead);
+                                CollectionAssert.AreEqual(localBuffer, remoteBuffer);
+                                break;
+                            }
                             case 2 when local.Length < MaxFileSize: // Seek
-                                {
-                                    int position = (int)local.Position;
-                                    int length = (int)local.Length;
+                            {
+                                int position = (int)local.Position;
+                                int length = (int)local.Length;
 
-                                    SeekOrigin origin = (SeekOrigin)random.Next(0, 3);
-                                    long offset = 0;
-                                    switch (origin)
-                                    {
-                                        case SeekOrigin.Begin:
-                                            offset = random.Next(0, length * 2);
-                                            break;
-                                        case SeekOrigin.Current:
-                                            offset = random.Next(-position, position);
-                                            break;
-                                        case SeekOrigin.End:
-                                            offset = random.Next(-length, length);
-                                            break;
-                                    }
-                                    long newPosRemote = remote.Seek(offset, origin);
-                                    long newPosLocal = local.Seek(offset, origin);
-                                    Assert.AreEqual(newPosLocal, newPosRemote);
-                                    Assert.AreEqual(local.Length, remote.Length);
-                                    break;
+                                SeekOrigin origin = (SeekOrigin)random.Next(0, 3);
+                                long offset = 0;
+                                switch (origin)
+                                {
+                                    case SeekOrigin.Begin:
+                                        offset = random.Next(0, length * 2);
+                                        break;
+                                    case SeekOrigin.Current:
+                                        offset = random.Next(-position, position);
+                                        break;
+                                    case SeekOrigin.End:
+                                        offset = random.Next(-length, length);
+                                        break;
                                 }
+                                long newPosRemote = remote.Seek(offset, origin);
+                                long newPosLocal = local.Seek(offset, origin);
+                                Assert.AreEqual(newPosLocal, newPosRemote);
+                                Assert.AreEqual(local.Length, remote.Length);
+                                break;
+                            }
                             case 3: // SetLength
-                                {
-                                    long newLength = random.Next(0, MaxFileSize);
-                                    remote.SetLength(newLength);
-                                    local.SetLength(newLength);
-                                    Assert.AreEqual(local.Length, remote.Length);
-                                    Assert.AreEqual(local.Position, remote.Position);
-                                    break;
-                                }
+                            {
+                                long newLength = random.Next(0, MaxFileSize);
+                                remote.SetLength(newLength);
+                                local.SetLength(newLength);
+                                Assert.AreEqual(local.Length, remote.Length);
+                                Assert.AreEqual(local.Position, remote.Position);
+                                break;
+                            }
                             case 4: // Flush
-                                {
-                                    remote.Flush();
-                                    local.Flush();
-                                    break;
-                                }
+                            {
+                                remote.Flush();
+                                local.Flush();
+                                break;
+                            }
                         }
 #pragma warning restore IDE0010 // Add missing cases
                     }
